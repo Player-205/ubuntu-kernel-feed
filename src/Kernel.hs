@@ -4,15 +4,25 @@
 module Kernel where
 
 import qualified Data.Text as T
-import Network.HTTP.Directory 
+import Network.HTTP.Directory
+    ( (+/+), httpDirectory', httpLastModified', noTrailingSlash ) 
 import Network.HTTP.Simple
-import Data.Foldable
+    ( parseRequest_, getResponseBody, httpBS )
+import Data.Foldable ( Foldable(fold) )
 import Data.Text.Encoding (decodeUtf8)
 import Data.Maybe ( mapMaybe )
 
 import Version
-import Options
+    ( Version(..),
+      Time,
+      Changes,
+      Deb,
+      parseVersion,
+      parseChanges,
+      parseTime )
+import Options ( Options(..) )
 import Data.Time (getCurrentTime)
+import Data.List (sort)
 
 
 
@@ -26,8 +36,17 @@ data Kernel = Kernel
 kernelPpa :: String
 kernelPpa = "https://kernel.ubuntu.com/~kernel-ppa/mainline/"
 
-kernelList :: IO [Version]
-kernelList = mapMaybe (parseVersion . noTrailingSlash) <$> httpDirectory' kernelPpa
+kernelList :: Options ->  IO [Version]
+kernelList Options{..} 
+  = sort 
+  . filter required 
+  . mapMaybe (parseVersion . noTrailingSlash) 
+  <$> httpDirectory' kernelPpa
+  where
+    required v = v >= minVersion && (not noRC || not (isRC v))
+    isRC (Version _ _ []) = False
+    isRC _ = True
+
 
 fetchChangelog :: Version -> IO Changes
 fetchChangelog ver = do
@@ -50,15 +69,15 @@ listDebs ver = do
 
 getTime :: Version -> IO Time
 getTime ver = do
-  let link = kernelPpa <> show ver <> "/" <> "CHECKSUMS"
+  let link = kernelPpa <> show ver <> "/CHECKSUMS"
   maybeTime <- httpLastModified' link
   case maybeTime of
     Nothing -> parseTime <$> getCurrentTime
     Just ut -> pure $ parseTime ut
 
 
-buildKernel :: Options -> Version -> IO Kernel
-buildKernel Options{..} version = do
+getKernel :: Options -> Version -> IO Kernel
+getKernel Options{..} version = do
   debs <- whenDefault (version >= minDebs) (listDebs version)
   changes <- whenDefault (version >= minChanges) (fetchChangelog version)
   time <- getTime version
@@ -66,3 +85,9 @@ buildKernel Options{..} version = do
  where
    whenDefault True x = Just <$> x
    whenDefault  _ _ = pure Nothing
+
+
+listKernels :: Options -> IO [Kernel]
+listKernels opts = do
+  versions <- kernelList opts
+  traverse (getKernel opts) versions

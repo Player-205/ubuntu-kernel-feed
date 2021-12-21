@@ -1,24 +1,24 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 module Version where
-import qualified Data.Text as T
+
+import Data.Text qualified as T
 import Data.String (IsString (fromString))
 import Data.Maybe (fromJust)
 import Control.Monad ((<=<))
 import Control.Applicative (liftA3, Applicative (liftA2))
 import Text.Read (readMaybe)
-import Data.Ord
-import Data.Foldable
-import Data.ByteString
-import qualified Data.Text.Encoding as T
-import Data.Time
+import Data.ByteString ( ByteString )
+import Data.Text.Encoding qualified as T
+import Data.Time ( UTCTime )
 
 type Deb = T.Text
 
-buildDebs :: [Deb] -> T.Text 
-buildDebs = T.unlines 
+buildDebs :: [Deb] -> T.Text
+buildDebs = flip T.snoc '\n' . T.unlines
 
-type Changes = T.Text 
+type Changes = T.Text
 
 parseChanges :: ByteString -> Changes
 parseChanges = T.decodeUtf8
@@ -29,15 +29,15 @@ buildChanges = id
 type Time = T.Text
 
 parseTime :: UTCTime -> Time
-parseTime = T.pack . show 
+parseTime = T.pack . show
 
 buildTime :: Time -> T.Text
 buildTime = id
 
 type Suffix = [T.Text]
 
-buildSuffix :: Suffix -> T.Text 
-buildSuffix = foldMap ("-"<>) 
+buildSuffix :: Suffix -> T.Text
+buildSuffix = foldMap (T.cons '-')
 
 
 type Minor = Int
@@ -56,9 +56,9 @@ instance Ord Version where
     compare x x' `andThen` compare yy yy' `andThen`
       case (suff, suff') of
         ([], []) -> EQ
-        ([], _) -> GT     
-        (_, []) -> LT     
-        _ -> compare suff suff'  
+        ([], _) -> GT
+        (_, []) -> LT
+        _ -> compare suff suff'
     where
       andThen EQ y = y
       andThen x _ = x
@@ -68,7 +68,7 @@ instance IsString Version where
 
 instance Show Version where
   show (Version major minor suffix) =
-    "v" 
+    "v"
     <> show major
     <> foldMap (('.':) . show) minor
     <> T.unpack (buildSuffix suffix)

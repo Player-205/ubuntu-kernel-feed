@@ -7,7 +7,7 @@ import Data.Text.IO qualified as TIO
 
 import Options
 import BuildFeed
-import qualified Data.Text.Lazy.IO as TIO.Lazy
+import Data.Text.Lazy.IO qualified as TIO.Lazy
 
 main :: IO ()
 main =  do
