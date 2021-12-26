@@ -1,11 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE BlockArguments #-}
 
 module Kernel where
 
 import qualified Data.Text as T
 import Network.HTTP.Directory
-    ( (+/+), httpDirectory', httpLastModified', noTrailingSlash ) 
+    ( (+/+), httpDirectory', httpLastModified', noTrailingSlash, httpExists' ) 
 import Network.HTTP.Simple
     ( parseRequest_, getResponseBody, httpBS )
 import Data.Foldable ( Foldable(fold) )
@@ -19,7 +20,7 @@ import Version
       Deb,
       parseVersion,
       parseChanges,
-      parseTime )
+      parseTime, KernelHeader )
 import Options ( Options(..) )
 import Data.Time (getCurrentTime)
 import Data.List (sort)
@@ -28,7 +29,8 @@ import Data.List (sort)
 
 data Kernel = Kernel 
   { version :: Version
-  , debs :: Maybe [Deb]
+ -- , debs :: Maybe [Deb]
+  , header :: Maybe KernelHeader
   , changes :: Maybe Changes
   , time :: Time 
   } 
@@ -48,24 +50,38 @@ kernelList Options{..}
     isRC _ = True
 
 
-fetchChangelog :: Version -> IO Changes
+fetchChangelog :: Version -> IO (Maybe Changes)
 fetchChangelog ver = do
-  let req = parseRequest_ (kernelPpa <> show ver <> "/CHANGES")
-  body <- getResponseBody <$> httpBS req
-  pure $ parseChanges body
+  let link = kernelPpa <> show ver <> "/CHANGES"
+  exist <- httpExists' link
+  whenDefault exist (pure . T.pack $ link) 
+  -- let req = parseRequest_ link
+  -- body <- getResponseBody <$> httpBS req
+  -- pure $ parseChanges body
 
-listDebs :: Version -> IO [Deb]
-listDebs ver = do
-  let link = kernelPpa <> show ver <> "/"
-  content <- httpDirectory' link
-  let dirs = filter (T.isSuffixOf "/") content
-  nestedContent <- fold <$> traverse (httpDirectory' . (link +/+) . T.unpack) dirs
-  pure . map (T.pack link <>) . filter requiered $ (content <> nestedContent)
-  where
-    requiered t = isAllDeb t || (isGeneric t && isAmdDeb t)
-    isAllDeb = T.isSuffixOf "_all.deb"
-    isAmdDeb = T.isSuffixOf "_amd64.deb"
-    isGeneric = T.isInfixOf "generic"
+
+fetchHeader :: Version -> IO (Maybe KernelHeader)
+fetchHeader ver = do
+  let link = kernelPpa <> show ver <>  "/HEADER.html"
+  exist <- httpExists' link
+  whenDefault exist do
+    let req = parseRequest_ link
+    body <- getResponseBody <$> httpBS req
+    pure . decodeUtf8 $ body
+    
+
+-- listDebs :: Version -> IO [Deb]
+-- listDebs ver = do
+--   let link = kernelPpa <> show ver <> "/"
+--   content <- httpDirectory' link
+--   let dirs = filter (T.isSuffixOf "/") content
+--   nestedContent <- fold <$> traverse (httpDirectory' . (link +/+) . T.unpack) dirs
+--   pure . map (T.pack link <>) . filter requiered $ (content <> nestedContent)
+--   where
+--     requiered t = isAllDeb t || (isGeneric t && isAmdDeb t)
+--     isAllDeb = T.isSuffixOf "_all.deb"
+--     isAmdDeb = T.isSuffixOf "_amd64.deb"
+--     isGeneric = T.isInfixOf "generic"
 
 getTime :: Version -> IO Time
 getTime ver = do
@@ -78,14 +94,17 @@ getTime ver = do
 
 getKernel :: Options -> Version -> IO Kernel
 getKernel Options{..} version = do
-  debs <- whenDefault (version >= minDebs) (listDebs version)
-  changes <- whenDefault (version >= minChanges) (fetchChangelog version)
+  --debs <- whenDefault (version >= minDebs) (listDebs version)
+  header <- fetchHeader version
+  changes <- fetchChangelog version
   time <- getTime version
   pure Kernel{..}
- where
-   whenDefault True x = Just <$> x
-   whenDefault  _ _ = pure Nothing
+ 
 
+
+whenDefault :: Applicative f => Bool -> f a -> f (Maybe a)
+whenDefault True x = Just <$> x
+whenDefault  _ _ = pure Nothing
 
 listKernels :: Options -> IO [Kernel]
 listKernels opts = do

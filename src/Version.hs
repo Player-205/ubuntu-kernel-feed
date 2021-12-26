@@ -18,13 +18,18 @@ type Deb = T.Text
 buildDebs :: [Deb] -> T.Text
 buildDebs = flip T.snoc '\n' . T.unlines
 
+type KernelHeader = T.Text 
+
+buildHeader :: KernelHeader -> T.Text
+buildHeader = id
+
 type Changes = T.Text
 
 parseChanges :: ByteString -> Changes
 parseChanges = T.decodeUtf8
 
 buildChanges :: Changes -> T.Text
-buildChanges = id
+buildChanges changes = "<a href=\"" <> changes <> "\">CHANGES</a>\n<br>"
 
 type Time = T.Text
 

@@ -8,12 +8,14 @@ import Data.Text.IO qualified as TIO
 import Options
 import BuildFeed
 import Data.Text.Lazy.IO qualified as TIO.Lazy
+import Data.Text.Lazy.Encoding (encodeUtf8)
+import Data.ByteString.Lazy.Char8 qualified as BS
 
 main :: IO ()
-main =  do
-  let opts = Options { minVersion ="v5.13", minDebs = "v5.14", minChanges = "v5.15.8", noRC = True }
+main =  opts >>= \opts -> do
   f <- feed opts
-  TIO.Lazy.writeFile "feed.xml" (renderFeed f)
+  let bs = encodeUtf8 (renderFeed f)
+  BS.writeFile (fileName opts) bs
   
 
 

@@ -4,7 +4,7 @@
 module BuildFeed where
 
 import Kernel ( kernelPpa, Kernel(..), listKernels )
-import Version ( buildDebs, buildChanges, buildTime, parseTime )
+import Version ( buildDebs, buildChanges, buildTime, parseTime, buildHeader )
 
 import Text.Feed.Types ( Feed(AtomFeed) )
 import Text.Atom.Feed qualified as Atom
@@ -18,7 +18,7 @@ import Data.Time (getCurrentTime)
 
 
 renderFeed :: Atom.Feed -> Lazy.Text
-renderFeed = fromJust . Export.textFeedWith def{rsPretty = True} . AtomFeed
+renderFeed = fromJust . Export.textFeedWith def {rsPretty = True} . AtomFeed
 
 
 toEntry :: Kernel -> Atom.Entry
@@ -27,7 +27,7 @@ toEntry Kernel{..} =
   (Text.pack $ kernelPpa <> show version)
   (Atom.TextString (Text.pack $ show version))
   (buildTime time))
-  { Atom.entryContent = Atom.TextContent <$> fmap buildDebs debs <> fmap buildChanges changes }
+  { Atom.entryContent = Atom.HTMLContent <$> fmap buildHeader header <> fmap buildChanges changes }
 
 
 feed :: Options -> IO Atom.Feed
