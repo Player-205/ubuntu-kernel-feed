@@ -70,18 +70,18 @@ fetchHeader ver = do
     pure . decodeUtf8 $ body
     
 
--- listDebs :: Version -> IO [Deb]
--- listDebs ver = do
---   let link = kernelPpa <> show ver <> "/"
---   content <- httpDirectory' link
---   let dirs = filter (T.isSuffixOf "/") content
---   nestedContent <- fold <$> traverse (httpDirectory' . (link +/+) . T.unpack) dirs
---   pure . map (T.pack link <>) . filter requiered $ (content <> nestedContent)
---   where
---     requiered t = isAllDeb t || (isGeneric t && isAmdDeb t)
---     isAllDeb = T.isSuffixOf "_all.deb"
---     isAmdDeb = T.isSuffixOf "_amd64.deb"
---     isGeneric = T.isInfixOf "generic"
+listDebs :: Version -> IO [Deb]
+listDebs ver = do
+  let link = kernelPpa <> show ver <> "/"
+  content <- httpDirectory' link
+  let dirs = filter (T.isSuffixOf "/") content
+  nestedContent <- fold <$> traverse (httpDirectory' . (link +/+) . T.unpack) dirs
+  pure . map (T.pack link <>) . filter requiered $ (content <> nestedContent)
+  where
+    requiered t = isAllDeb t || (isGeneric t && isAmdDeb t)
+    isAllDeb = T.isSuffixOf "_all.deb"
+    isAmdDeb = T.isSuffixOf "_amd64.deb"
+    isGeneric = T.isInfixOf "generic"
 
 getTime :: Version -> IO Time
 getTime ver = do

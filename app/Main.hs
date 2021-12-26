@@ -7,7 +7,6 @@ import Data.Text.IO qualified as TIO
 
 import Options
 import BuildFeed
-import Data.Text.Lazy.IO qualified as TIO.Lazy
 import Data.Text.Lazy.Encoding (encodeUtf8)
 import Data.ByteString.Lazy.Char8 qualified as BS
 
