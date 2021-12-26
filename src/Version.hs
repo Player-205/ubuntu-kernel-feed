@@ -1,6 +1,8 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Version where
 
 import Data.Text qualified as T
@@ -12,38 +14,58 @@ import Text.Read (readMaybe)
 import Data.ByteString ( ByteString )
 import Data.Text.Encoding qualified as T
 import Data.Time ( UTCTime )
+import Data.Coerce (coerce)
+import Data.Text.Encoding (decodeUtf8)
+import Data.Function (on)
 
-type Deb = T.Text
+newtype Deb = Deb T.Text
+
+parseDeb :: T.Text -> T.Text -> Deb 
+parseDeb link deb = coerce (link <> deb) 
 
 buildDebs :: [Deb] -> T.Text
-buildDebs = flip T.snoc '\n' . T.unlines
+buildDebs = flip T.snoc '\n' . T.unlines . coerce
 
-type KernelHeader = T.Text 
+newtype KernelHeader = KernelHeader T.Text 
+
+parseHeader :: ByteString -> KernelHeader
+parseHeader = coerce . decodeUtf8
 
 buildHeader :: KernelHeader -> T.Text
-buildHeader = id
+buildHeader = coerce
 
-type Changes = T.Text
+newtype Changes = Changes T.Text
 
-parseChanges :: ByteString -> Changes
-parseChanges = T.decodeUtf8
+parseChanges :: T.Text  -> Changes
+parseChanges = coerce 
 
 buildChanges :: Changes -> T.Text
-buildChanges changes = "<a href=\"" <> changes <> "\">CHANGES</a>\n<br>"
+buildChanges changes = "<a href=\"" <> coerce changes <> "\">CHANGES</a>\n<br>"
 
-type Time = T.Text
+newtype Time = Time UTCTime
 
 parseTime :: UTCTime -> Time
-parseTime = T.pack . show
+parseTime = coerce
 
 buildTime :: Time -> T.Text
-buildTime = id
+buildTime = T.pack . show @UTCTime . coerce 
 
-type Suffix = [T.Text]
+newtype Suffix = Suffix [T.Text]
+  deriving newtype Eq
+
+instance Ord Suffix where
+  compare (Suffix []) (Suffix []) = EQ
+  compare (Suffix []) _ = GT
+  compare _ (Suffix []) = LT
+  compare (Suffix xs) (Suffix ys) = compare xs ys 
 
 buildSuffix :: Suffix -> T.Text
-buildSuffix = foldMap (T.cons '-')
+buildSuffix = foldMap (T.cons '-') . coerce @_ @[T.Text]
 
+
+isRC :: Version -> Bool
+isRC (Version _ _ (Suffix [])) = False
+isRC _ = True
 
 type Minor = Int
 
@@ -54,23 +76,10 @@ instance Show Major where
   show (Major x yy) = show x <> "." <> show yy
 
 data Version = Version Major (Maybe Minor) Suffix
-  deriving (Eq)
-
-instance Ord Version where
-  compare (Version x yy suff) (Version x' yy' suff') =
-    compare x x' `andThen` compare yy yy' `andThen`
-      case (suff, suff') of
-        ([], []) -> EQ
-        ([], _) -> GT
-        (_, []) -> LT
-        _ -> compare suff suff'
-    where
-      andThen EQ y = y
-      andThen x _ = x
+  deriving (Eq, Ord)
 
 instance IsString Version where
   fromString = fromJust . parseVersion . T.pack
-
 instance Show Version where
   show (Version major minor suffix) =
     "v"
@@ -86,11 +95,11 @@ parseVersion = buildVersion <=< fmap (T.splitOn ".") . T.stripPrefix "v"
     parseSuffix str =  (readText num, suff)
       where (num:suff) = T.splitOn "-" str
 
-    buildVersion [x, yy] = liftA3 Version major (pure Nothing) (pure suff)
+    buildVersion [x, yy] = liftA3 Version major (pure Nothing) (pure (coerce suff))
       where
         (ver, suff) = parseSuffix yy
         major = liftA2 Major (readText x) ver
-    buildVersion [x, yy, zzz] = liftA3 Version major (pure minor) (pure suff)
+    buildVersion [x, yy, zzz] = liftA3 Version major (pure minor) (pure (coerce suff))
       where
         (minor, suff) = parseSuffix zzz
         major = liftA2 Major (readText x) (readText yy)

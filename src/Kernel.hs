@@ -6,7 +6,7 @@ module Kernel where
 
 import qualified Data.Text as T
 import Network.HTTP.Directory
-    ( (+/+), httpDirectory', httpLastModified', noTrailingSlash, httpExists' ) 
+    ( (+/+), httpDirectory', httpLastModified', noTrailingSlash, httpExists' )
 import Network.HTTP.Simple
     ( parseRequest_, getResponseBody, httpBS )
 import Data.Foldable ( Foldable(fold) )
@@ -19,42 +19,40 @@ import Version
       Changes,
       Deb,
       parseVersion,
-      parseChanges,
-      parseTime, KernelHeader )
+      parseTime, KernelHeader, isRC, parseChanges, parseHeader, parseDeb )
 import Options ( Options(..) )
 import Data.Time (getCurrentTime)
 import Data.List (sort)
 
 
 
-data Kernel = Kernel 
+data Kernel = Kernel
   { version :: Version
  -- , debs :: Maybe [Deb]
   , header :: Maybe KernelHeader
   , changes :: Maybe Changes
-  , time :: Time 
-  } 
+  , time :: Time
+  }
 
 kernelPpa :: String
 kernelPpa = "https://kernel.ubuntu.com/~kernel-ppa/mainline/"
 
 kernelList :: Options ->  IO [Version]
-kernelList Options{..} 
-  = sort 
-  . filter required 
-  . mapMaybe (parseVersion . noTrailingSlash) 
+kernelList Options{..}
+  = sort
+  . filter required
+  . mapMaybe (parseVersion . noTrailingSlash)
   <$> httpDirectory' kernelPpa
   where
-    required v = v >= minVersion && (not noRC || not (isRC v))
-    isRC (Version _ _ []) = False
-    isRC _ = True
+    required v = v >= minVersion && not (noRC && isRC v)
+
 
 
 fetchChangelog :: Version -> IO (Maybe Changes)
 fetchChangelog ver = do
   let link = kernelPpa <> show ver <> "/CHANGES"
   exist <- httpExists' link
-  whenDefault exist (pure . T.pack $ link) 
+  whenDefault exist (pure . parseChanges . T.pack $ link)
   -- let req = parseRequest_ link
   -- body <- getResponseBody <$> httpBS req
   -- pure $ parseChanges body
@@ -67,8 +65,8 @@ fetchHeader ver = do
   whenDefault exist do
     let req = parseRequest_ link
     body <- getResponseBody <$> httpBS req
-    pure . decodeUtf8 $ body
-    
+    pure . parseHeader $ body
+
 
 listDebs :: Version -> IO [Deb]
 listDebs ver = do
@@ -76,7 +74,9 @@ listDebs ver = do
   content <- httpDirectory' link
   let dirs = filter (T.isSuffixOf "/") content
   nestedContent <- fold <$> traverse (httpDirectory' . (link +/+) . T.unpack) dirs
-  pure . map (T.pack link <>) . filter requiered $ (content <> nestedContent)
+  pure . map (parseDeb (T.pack link)) 
+       . filter requiered 
+       $ (content <> nestedContent)
   where
     requiered t = isAllDeb t || (isGeneric t && isAmdDeb t)
     isAllDeb = T.isSuffixOf "_all.deb"
@@ -99,7 +99,7 @@ getKernel Options{..} version = do
   changes <- fetchChangelog version
   time <- getTime version
   pure Kernel{..}
- 
+
 
 
 whenDefault :: Applicative f => Bool -> f a -> f (Maybe a)

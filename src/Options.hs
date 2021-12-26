@@ -1,15 +1,10 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BlockArguments #-}
 module Options where
-
-
-
 
 import Version
 
 import Options.Applicative
 import Options.Applicative.Types
-
 import qualified Data.Text as T
 
 data Options = Options 
